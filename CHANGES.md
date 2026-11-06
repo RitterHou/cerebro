@@ -1,6 +1,62 @@
 Cerebro Releases
 ------------
 
+### v0.12.0 - 未发布
+
+#### 新功能
+- 组合索引模板（`_index_template`）、组件模板（`_component_template`）页面
+- data streams 页面：大小、最新事件时间、生命周期策略，支持 rollover 和删除
+- ILM 生命周期策略、SLM 快照策略页面（SLM 支持立即执行）
+- 分片诊断接口：分片大小与未分配原因（`_cat/shards`、`_cluster/allocation/explain`）、迁移进度（`_cat/recovery`）
+- Cerebro 登录支持 OIDC 单点登录，以及信任反向代理（oauth2-proxy、Cloudflare Access）传来的用户
+- 分析页列出 `match_only_text`、`search_as_you_type`、`annotated_text` 字段
+
+### v0.11.0 - 未发布
+
+前端用 Vue 3 + Vite + TypeScript 重写，界面与旧版逐像素一致（Playwright 截图比对，保留为回归测试）。
+
+#### 新功能
+- 连接页新增 API key 输入框
+- 只读连接下隐藏修改类按钮
+
+#### 修复（原版遗留）
+- templates 页模式列和按模式筛选改读 `index_patterns`（原来在 7.x 起一直为空），新建示例改用 `index_patterns`
+- 编辑器的 JSON 语法检查改用与 ace 1.2.4 配套的 worker，不再对合法 JSON 误报
+- REST 页路径补全会转义索引名（原来恶意集群可以注入脚本）
+- 确认框用 Esc 关闭后不再残留回调；overview 的 “force merge selected” 会弹确认框
+- cat 表格排序方向、带点列名排序；aliases 删除不再展开详情；index settings 待保存计数；snapshot 删除失败提示；analysis 未选索引时不发请求
+- 离开页面时销毁编辑器，不再泄漏 worker
+
+#### 改进
+- 第三方脚本改用同版本的压缩文件，首屏下载约减少 40%
+
+### v0.10.0 - 未发布
+
+后端用 Go 重写，界面不变。Scala 版的最后状态见 tag `scala-final`。
+
+#### 变化
+- 只支持 Elasticsearch 7.10+、8.x、9.x；删除 2.x–6.x 的兼容逻辑
+- 单个可执行文件，前端打包在内；镜像改为 `ghcr.io/ritterhou/cerebro`（distroless，amd64/arm64）
+- 配置改为 YAML 加环境变量，旧环境变量继续有效，对应关系见 docs/CONFIG.md
+
+#### 新功能
+- 连接 ES 支持 API Key 和 Bearer（页面上用户名留空、密码填 API Key），支持自定义 CA、客户端证书（mTLS）
+- 可以在配置里给集群预设凭据
+- 只读模式（全局或按集群），服务端拦截所有修改类操作
+- Basic 登录支持多用户，密码用 bcrypt 哈希
+- 可以关闭 REST 请求历史，适合无状态部署；`allowUnknownHosts: false` 只允许连接配置里的集群
+- `/healthz` 接口和 `healthcheck` 子命令；结构化日志
+
+#### 修复
+- 会话密钥不再写死在配置里，首次启动随机生成（旧版默认配置下会话 cookie 可以被伪造）
+- 节点角色识别 `data_frozen`
+- 集群地址带路径前缀（如 `https://example.com/es`）时可以正常使用
+- 分析页：mapping 里有 `dynamic`、`_source` 等设置时不再报错
+- 按已有索引创建：不再拿到旧版模板的设置，去掉 `_doc` 类型层和 ES 生成的设置项，7.x 起可以正常创建
+- 创建快照时“忽略不可用索引”“包含全局状态”两个选项现在会真正传给 ES
+- REST 页编辑器为空对象时不发送 body，`GET _cluster/health` 等接口不再报 400
+- LDAP 组查询会转义用户名，空密码直接拒绝
+
 ### v0.1.0 - July 14th, 2016
 
 First cerebro release.

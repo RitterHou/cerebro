@@ -1,0 +1,114 @@
+# Cerebro 配置示例。复制为 cerebro.yaml（或 /etc/cerebro/cerebro.yaml），也可以用 -config 或 CEREBRO_CONFIG 指定。
+# 值里可以写 ${ENV_NAME} 引用环境变量，适合放密码和 API Key。
+
+# 监听地址和端口
+address: ""        # 默认监听所有网卡
+port: 9000
+
+# 子路径部署，例如反向代理在 https://example.com/cerebro/ 下
+basePath: /
+
+# 数据目录：保存 REST 请求历史（cerebro.db）和会话密钥（session.key）。镜像里是 /data
+dataDir: .
+
+# 只读模式：拦截所有修改类操作（删除/关闭索引、迁移分片、改设置、REST 页非 GET 请求等）
+readOnly: false
+
+# 前面的反向代理（CIDR）。来自这些地址的请求按 X-Forwarded-For 识别客户端 IP，用于登录失败限速
+trustedProxies: []
+
+# 是否允许在连接页手动输入集群地址；false 时只能连接下面 hosts 里的集群。
+# 把下面集群的 readOnly 当作安全边界时，请设为 false（否则可以换一种写法输入同一个地址）
+allowUnknownHosts: true
+
+session:
+  # 留空则首次启动随机生成并保存在 dataDir/session.key。多实例部署时需要设成相同的值（至少 32 个字符）
+  secret: ""
+  maxAge: 168h
+  # secure: true   # 强制 cookie 只走 HTTPS；不设置时按请求是否 HTTPS 判断
+
+history:
+  enabled: true    # false：不保存任何东西，适合无状态部署
+  size: 50         # 每个用户保留的条数
+  # path: ./cerebro.db   # 默认 <dataDir>/cerebro.db，旧版的 cerebro.db 可以直接使用
+
+es:
+  timeout: 2m
+  # 手动输入地址时使用的 TLS 设置，也是各集群的默认值
+  tls:
+    ca: ""                    # 自定义 CA（PEM）
+    cert: ""                  # 客户端证书（mTLS）
+    key: ""
+    insecureSkipVerify: false # 跳过证书校验，只在测试时使用
+    serverName: ""
+
+# Cerebro 自身的登录：none、basic、ldap、oidc、proxy
+auth:
+  type: none
+  basic:
+    users:
+      # 密码必须是 bcrypt 哈希，用 `cerebro hash-password` 生成
+      - username: admin
+        password: "$2a$10$replace.this.with.a.real.bcrypt.hash.generated.by.cerebro"
+  ldap:
+    url: ldap://ldap.example.com:389
+    baseDN: ou=People,dc=example,dc=com
+    method: simple
+    # 用户名先填，baseDN 后填，同 Java String.format，例如 uid=%s,%s 或 %s@example.com
+    userTemplate: uid=%s,%s
+    startTLS: false
+    # 组成员校验（可选，group 为空则不校验）
+    bindDN: cn=admin,dc=example,dc=com
+    bindPassword: ${LDAP_BIND_PWD}
+    groupSearch:
+      baseDN: ""              # 默认用上面的 baseDN
+      userAttr: uid
+      userAttrTemplate: ""    # 默认用 userTemplate
+      group: memberOf=cn=cerebro,ou=Groups,dc=example,dc=com
+  # OpenID Connect 单点登录（Keycloak、Okta、Google、Azure AD 等）
+  oidc:
+    issuer: https://sso.example.com/realms/main
+    clientID: cerebro
+    clientSecret: ${OIDC_CLIENT_SECRET}
+    # 默认按请求推导为 <协议>://<主机><basePath>auth/oidc/callback，需要在 IdP 里登记
+    redirectURL: ""
+    scopes: [openid, email, profile]
+    usernameClaim: email
+    # 都不填表示 IdP 认证通过的用户都能登录；填了则任一项匹配即可
+    allowedUsers: []
+    allowedDomains: [example.com]
+    groupsClaim: groups
+    allowedGroups: []
+  # 信任反向代理（oauth2-proxy、Cloudflare Access 等）传来的用户
+  proxy:
+    header: X-Forwarded-User        # oauth2-proxy 可用 X-Auth-Request-Email，Cloudflare 可用 Cf-Access-Authenticated-User-Email
+    trustedProxies: [10.0.0.5/32]   # 只接受代理自己的地址发来的请求头，必填；范围太大时同网段的机器都能伪造用户
+    # 可选：校验代理签发的 JWT，用户名取自 claim（以 JWT 为准，忽略 header）
+    # jwt:
+    #   header: Cf-Access-Jwt-Assertion
+    #   issuer: https://<team>.cloudflareaccess.com
+    #   jwksURL: https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+    #   audience: <Application Audience (AUD) Tag>
+    #   claim: email
+
+# 预设集群，页面上按名字连接
+hosts:
+  - name: Local
+    host: http://localhost:9200
+  - name: Production
+    host: https://es.example.com/es   # 可以带路径前缀
+    readOnly: true
+    # 预设凭据（三选一）。用户在页面上填的凭据只在浏览器内存里，服务端不落盘、不打日志
+    auth:
+      apiKey: ${PROD_ES_API_KEY}
+      # username: elastic
+      # password: ${PROD_ES_PASSWORD}
+      # bearer: ${PROD_ES_TOKEN}
+    tls:
+      ca: /etc/cerebro/prod-ca.pem
+    # 把浏览器请求里的这些头透传给 ES
+    headersWhitelist: [x-proxy-user]
+
+log:
+  level: info      # debug 会记录每个请求（不含 body）
+  format: text     # 或 json
